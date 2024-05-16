@@ -4,6 +4,7 @@ const UserVerification = require("../model/userVerification");
 const UserProfile = require("../model/userProfile");
 const Chat = require("../model/chat");
 const ChatUser = require("../model/chatUser");
+const ChatConversation = require("../model/chatConversation");
 const validator = require("validator");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
@@ -227,59 +228,64 @@ const GetAllUser = async (req, res) => {
 
 const UserChat = async (req, res) => {
   try {
-  const current = await Authentication(req, res);
-  const user2_id = req.body.user2_id;
-  const user1_id = current._id;
+    const current = await Authentication(req, res);
+    const user2_id = req.body.user2_id;
+    const user1_id = current._id;
 
-  const chatUsers = await ChatUser.findOne({
-    user_id: {
-      $all: [
-        new mongoose.Types.ObjectId(user1_id),
-        new mongoose.Types.ObjectId(user1_id),
-      ],
-    },
-  });
+    const chatUsers = await ChatUser.findOne({
+      user_id: {
+        $all: [
+          new mongoose.Types.ObjectId(user1_id),
+          new mongoose.Types.ObjectId(user1_id),
+        ],
+      },
+    });
 
-  console.log("chatUsers", !chatUsers);
+    if (!chatUsers) {
+      try {
+        const session = await mongoose.startSession();
+        session.startTransaction();
 
-  if (!chatUsers) {
-    try {
-      const session = await mongoose.startSession();
-      session.startTransaction();
+        const newChat = new Chat({
+          created_by: user1_id,
+        });
 
-      const newChat = new Chat({
-        created_by: user1_id,
-      });
+        const savedNewChat = await newChat.save({ session });
 
-      const savedNewChat = await newChat.save({ session });
+        const chatUser = new ChatUser({
+          chat_id: savedNewChat._id,
+          user_id: [user1_id, user2_id],
+        });
+        await chatUser.save({ session });
 
-      const chatUser = new ChatUser({
-        chat_id: savedNewChat._id,
-        user_id: [user1_id, user2_id],
-      });
-      await chatUser.save({ session });
-
-      await session.commitTransaction();
-      session.endSession();
-
-      return res
-        .status(200)
-        .json({ status: 200, message: "Successfully chat created" });
-    } catch (error) {
-      return res
-        .status(500)
-        .json({ status: 500, message: "Internal error", error: error });
+        await session.commitTransaction();
+        session.endSession();
+      } catch (error) {
+        return res
+          .status(500)
+          .json({ status: 500, message: "Internal error", error: error });
+      }
     }
-  }
+console.log("chatUsers.chat_id",chatUsers.chat_id)
+    const Conversation = await ChatConversation.find({
+      _id: chatUsers.chat_id,
+    }).populate("user_id");
 
-  return res
-    .status(200)
-    .json({ status: 200, message: "Chat found"});
-
+    if (Conversation && Conversation.length > 0) {
+      res.status(200).json(data);
+    } else {
+      res
+        .status(200)
+        .json({
+          status: 200,
+          message: "No message yet",
+          chat_id: chatUsers.chat_id,
+        });
+    }
   } catch (error) {
     return res
-    .status(500)
-    .json({ status: 500, message: "Internal error", error: error });
+      .status(500)
+      .json({ status: 500, message: "Internal error", error: error });
   }
 };
 
