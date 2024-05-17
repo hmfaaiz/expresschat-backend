@@ -71,22 +71,23 @@ const UserSignUp = async (req, res) => {
               .status(422)
               .json({ status: 422, message: "Inavlid Otp" });
           }
-          const hashedPassword = await bcrypt.hash(req.body.password, 10);
-          const user = new User({
-            email: req.body.email,
-            password: hashedPassword,
-          });
-          const savedUser = await user.save({ session });
 
           const profile = new UserProfile({
-            user_id: savedUser._id,
             email: req.body.email,
             name: req.body.name,
             country: req.body.country,
             professional: req.body.professional,
             age: req.body.age,
           });
-          await profile.save({ session });
+
+          const savedProfile = await profile.save({ session });
+          const hashedPassword = await bcrypt.hash(req.body.password, 10);
+          const user = new User({
+            email: req.body.email,
+            password: hashedPassword,
+            profile_id: savedProfile._id,
+          });
+          await user.save({ session });
 
           await session.commitTransaction();
           session.endSession();
@@ -266,21 +267,19 @@ const UserChat = async (req, res) => {
           .json({ status: 500, message: "Internal error", error: error });
       }
     }
-console.log("chatUsers.chat_id",chatUsers.chat_id)
+
     const Conversation = await ChatConversation.find({
-      _id: chatUsers.chat_id,
+      chat_id: chatUsers.chat_id,
     }).populate("user_id");
 
     if (Conversation && Conversation.length > 0) {
-      res.status(200).json(data);
+      res.status(200).json(Conversation);
     } else {
-      res
-        .status(200)
-        .json({
-          status: 200,
-          message: "No message yet",
-          chat_id: chatUsers.chat_id,
-        });
+      res.status(200).json({
+        status: 200,
+        message: "No message yet",
+        chat_id: chatUsers.chat_id,
+      });
     }
   } catch (error) {
     return res
@@ -289,6 +288,53 @@ console.log("chatUsers.chat_id",chatUsers.chat_id)
   }
 };
 
+const SendMsg = async (req, res) => {
+  try {
+    if (!req.body.message || req.body.message.trim().length < 1) {
+      return res.status(400).json({ status: 400, mesaage: "Invalid message" });
+    }
+    const current = await Authentication(req, res);
+    const user2_id = req.body.user2_id;
+    const user1_id = current._id;
+
+    const chatUsers = await ChatUser.findOne({
+      user_id: {
+        $all: [
+          new mongoose.Types.ObjectId(user1_id),
+          new mongoose.Types.ObjectId(user1_id),
+        ],
+      },
+    });
+    if (chatUsers) {
+      const conversation = new ChatConversation({
+        user_id: current._id,
+        chat_id: chatUsers.chat_id,
+        message: req.body.message,
+      });
+
+      await conversation.save();
+
+      const messages = await ChatConversation.find({
+        chat_id: chatUsers.chat_id,
+      }).populate({
+        path: "user_id",
+        select: "profile_id",
+        populate: {
+          path: "profile_id",
+          select: "name",
+        },
+      });
+
+      res.status(200).json(messages);
+    } else {
+      return res
+        .status(404)
+        .json({ status: 200, message: "Please first make chat connection" });
+    }
+  } catch {
+    return res.status(500).json({ status: 500, mesaage: "Somethig is wrong" });
+  }
+};
 module.exports = {
   SendCode,
   UserSignUp,
@@ -297,4 +343,5 @@ module.exports = {
   GetUserProfile,
   GetAllUser,
   UserChat,
+  SendMsg,
 };

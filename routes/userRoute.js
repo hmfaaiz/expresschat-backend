@@ -1,4 +1,4 @@
-const {SendCode,UserSignUp,UserSignin,UserLogout,GetUserProfile,GetAllUser,UserChat}=require("../controller/userController")
+const {SendCode,UserSignUp,UserSignin,UserLogout,GetUserProfile,GetAllUser,UserChat,SendMsg}=require("../controller/userController")
 const  route = require("express").Router()
 
 route.post("/sendcode",(req,res)=>{
@@ -21,6 +21,9 @@ route.get("/GetAllUser",(req,res)=>{
 })
 route.post("/UserChat",(req,res)=>{
     UserChat(req,res)
+})
+route.post("/SendMsg",(req,res)=>{
+    SendMsg(req,res)
 })
 
 module.exports=route

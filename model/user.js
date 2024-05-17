@@ -5,6 +5,7 @@ const userSchema = new mongoose.Schema(
     email: { type: String, required: true, unique: true },
     password: { type: String, required: true },
     token: { type: String },
+    profile_id:{type: mongoose.Schema.Types.ObjectId, ref: "userProfile"}
   },
 
   { timestamps: true }
