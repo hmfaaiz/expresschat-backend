@@ -193,9 +193,9 @@ const GetUserProfile = async (req, res) => {
   try {
     const current = await Authentication(req, res);
 
-    const findUser = await UserProfile.findOne({ user_id: current._id });
-    // .populate("user_id");
-
+    const findUser = await User.findOne({ _id: current._id })
+    .populate("profile_id");
+console.log("findUser",findUser)
     return res.status(200).json({
       status: 200,
       message: "Profile found successfully",
@@ -228,6 +228,7 @@ const GetAllUser = async (req, res) => {
 };
 
 const UserChat = async (req, res) => {
+  console.log("yes")
   try {
     const current = await Authentication(req, res);
     const user2_id = req.body.user2_id;
@@ -268,12 +269,19 @@ const UserChat = async (req, res) => {
       }
     }
 
-    const Conversation = await ChatConversation.find({
+    const messages = await ChatConversation.find({
       chat_id: chatUsers.chat_id,
-    }).populate("user_id");
+    }).populate({
+      path: "user_id",
+      select: "profile_id",
+      populate: {
+        path: "profile_id",
+        select: "name",
+      },
+    });
 
-    if (Conversation && Conversation.length > 0) {
-      res.status(200).json(Conversation);
+    if (messages && messages.length > 0) {
+      res.status(200).json(messages);
     } else {
       res.status(200).json({
         status: 200,
