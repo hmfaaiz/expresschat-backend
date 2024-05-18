@@ -229,7 +229,7 @@ const GetAllUser = async (req, res) => {
 };
 
 const UserChat = async (req, res) => {
-  // try {
+  try {
     if(!req.body.user2_id){
       return
     }
@@ -298,15 +298,15 @@ const UserChat = async (req, res) => {
       chat_id: chatUsers.chat_id,
     });
   }
-  // } catch (error) {
-  //   return res
-  //     .status(500)
-  //     .json({ status: 500, message: "Internal error", error: error });
-  // }
+  } catch (error) {
+    return res
+      .status(500)
+      .json({ status: 500, message: "Internal error", error: error });
+  }
 };
 
 const SendMsg = async (req, res) => {
-  // try {
+  try {
   if (!req.body.message || req.body.message.trim().length < 1) {
     return res.status(400).json({ status: 400, mesaage: "Invalid message" });
   }
@@ -345,6 +345,14 @@ const SendMsg = async (req, res) => {
     const io = getIO();
     console.log(`conversation:${chatUsers.chat_id}`);
     io.emit(`conversation:${chatUsers.chat_id}`, messages);
+    let data={
+      type:"message",
+      header:current.profile_id.name,
+      text:req.body.message
+     
+    }
+    console.log(`notification:${user2_id}`)
+    io.emit(`notification:${user2_id}`, data);
 
     res.status(200).json({ messages, chat_id: chatUsers.chat_id });
   } else {
@@ -353,9 +361,9 @@ const SendMsg = async (req, res) => {
       .json({ status: 200, message: "Please first make chat connection" });
   }
 
-  // } catch {
-  //   return res.status(500).json({ status: 500, mesaage: "Somethig is wrong" });
-  // }
+  } catch {
+    return res.status(500).json({ status: 500, mesaage: "Somethig is wrong" });
+  }
 };
 module.exports = {
   SendCode,
