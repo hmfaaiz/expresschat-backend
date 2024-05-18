@@ -11,10 +11,10 @@ const jwt = require("jsonwebtoken");
 const dotenv = require("dotenv");
 const userVerification = require("../model/userVerification");
 const mongoose = require("mongoose");
+const { getIO } = require("../services/socket");
 dotenv.config();
 
 const SendCode = async (req, res) => {
-  console.log("called");
   try {
     if (req.body.email && validator.isEmail(req.body.email)) {
       const newOtp = Math.floor(1000 + Math.random() * 9000);
@@ -193,9 +193,10 @@ const GetUserProfile = async (req, res) => {
   try {
     const current = await Authentication(req, res);
 
-    const findUser = await User.findOne({ _id: current._id })
-    .populate("profile_id");
-console.log("findUser",findUser)
+    const findUser = await User.findOne({ _id: current._id }).populate(
+      "profile_id"
+    );
+
     return res.status(200).json({
       status: 200,
       message: "Profile found successfully",
@@ -228,46 +229,107 @@ const GetAllUser = async (req, res) => {
 };
 
 const UserChat = async (req, res) => {
-  console.log("yes")
-  try {
-    const current = await Authentication(req, res);
-    const user2_id = req.body.user2_id;
-    const user1_id = current._id;
+  // try {
+    if(!req.body.user2_id){
+      return
+    }
+  const current = await Authentication(req, res);
 
-    const chatUsers = await ChatUser.findOne({
-      user_id: {
-        $all: [
-          new mongoose.Types.ObjectId(user1_id),
-          new mongoose.Types.ObjectId(user1_id),
-        ],
+  const user2_id = req.body.user2_id;
+  const user1_id = current.profile_id._id;
+
+  const chatUsers = await ChatUser.findOne({
+    user_id: {
+      $all: [
+        new mongoose.Types.ObjectId(user1_id),
+        new mongoose.Types.ObjectId(user2_id),
+      ],
+    },
+  });
+  let chat_id;
+
+  if (!chatUsers) {
+    try {
+      const session = await mongoose.startSession();
+      session.startTransaction();
+
+      const newChat = new Chat({
+        created_by: user1_id,
+      });
+
+      const savedNewChat = await newChat.save({ session });
+
+      const chatUser = new ChatUser({
+        chat_id: savedNewChat._id,
+        user_id: [user1_id, user2_id],
+      });
+      chat_id = savedNewChat._id;
+      await chatUser.save({ session });
+
+      await session.commitTransaction();
+      session.endSession();
+    } catch (error) {
+      return res
+        .status(500)
+        .json({ status: 500, message: "Internal error", error: error });
+    }
+  }
+
+
+    const messages = await ChatConversation.find({
+      chat_id: chatUsers.chat_id,
+    }).populate({
+      path: "user_id",
+      select: "profile_id",
+      populate: {
+        path: "profile_id",
+        select: "name",
       },
     });
+  
 
-    if (!chatUsers) {
-      try {
-        const session = await mongoose.startSession();
-        session.startTransaction();
+  if (messages && messages.length > 0) {
+    console.log("user chat",chatUsers.chat_id)
+    res.status(200).json({ messages, chat_id: chatUsers.chat_id });
+  } else {
+    res.status(200).json({
+      status: 200,
+      message: "No message yet",
+      chat_id: chatUsers.chat_id,
+    });
+  }
+  // } catch (error) {
+  //   return res
+  //     .status(500)
+  //     .json({ status: 500, message: "Internal error", error: error });
+  // }
+};
 
-        const newChat = new Chat({
-          created_by: user1_id,
-        });
+const SendMsg = async (req, res) => {
+  // try {
+  if (!req.body.message || req.body.message.trim().length < 1) {
+    return res.status(400).json({ status: 400, mesaage: "Invalid message" });
+  }
+  const current = await Authentication(req, res);
+  const user2_id = req.body.user2_id;
+  const user1_id = current.profile_id._id;
 
-        const savedNewChat = await newChat.save({ session });
+  const chatUsers = await ChatUser.findOne({
+    user_id: {
+      $all: [
+        new mongoose.Types.ObjectId(user1_id),
+        new mongoose.Types.ObjectId(user2_id),
+      ],
+    },
+  });
+  if (chatUsers) {
+    const conversation = new ChatConversation({
+      user_id: current._id,
+      chat_id: chatUsers.chat_id,
+      message: req.body.message,
+    });
 
-        const chatUser = new ChatUser({
-          chat_id: savedNewChat._id,
-          user_id: [user1_id, user2_id],
-        });
-        await chatUser.save({ session });
-
-        await session.commitTransaction();
-        session.endSession();
-      } catch (error) {
-        return res
-          .status(500)
-          .json({ status: 500, message: "Internal error", error: error });
-      }
-    }
+    await conversation.save();
 
     const messages = await ChatConversation.find({
       chat_id: chatUsers.chat_id,
@@ -280,68 +342,20 @@ const UserChat = async (req, res) => {
       },
     });
 
-    if (messages && messages.length > 0) {
-      res.status(200).json(messages);
-    } else {
-      res.status(200).json({
-        status: 200,
-        message: "No message yet",
-        chat_id: chatUsers.chat_id,
-      });
-    }
-  } catch (error) {
+    const io = getIO();
+    console.log(`conversation:${chatUsers.chat_id}`);
+    io.emit(`conversation:${chatUsers.chat_id}`, messages);
+
+    res.status(200).json({ messages, chat_id: chatUsers.chat_id });
+  } else {
     return res
-      .status(500)
-      .json({ status: 500, message: "Internal error", error: error });
+      .status(404)
+      .json({ status: 200, message: "Please first make chat connection" });
   }
-};
 
-const SendMsg = async (req, res) => {
-  try {
-    if (!req.body.message || req.body.message.trim().length < 1) {
-      return res.status(400).json({ status: 400, mesaage: "Invalid message" });
-    }
-    const current = await Authentication(req, res);
-    const user2_id = req.body.user2_id;
-    const user1_id = current._id;
-
-    const chatUsers = await ChatUser.findOne({
-      user_id: {
-        $all: [
-          new mongoose.Types.ObjectId(user1_id),
-          new mongoose.Types.ObjectId(user1_id),
-        ],
-      },
-    });
-    if (chatUsers) {
-      const conversation = new ChatConversation({
-        user_id: current._id,
-        chat_id: chatUsers.chat_id,
-        message: req.body.message,
-      });
-
-      await conversation.save();
-
-      const messages = await ChatConversation.find({
-        chat_id: chatUsers.chat_id,
-      }).populate({
-        path: "user_id",
-        select: "profile_id",
-        populate: {
-          path: "profile_id",
-          select: "name",
-        },
-      });
-
-      res.status(200).json(messages);
-    } else {
-      return res
-        .status(404)
-        .json({ status: 200, message: "Please first make chat connection" });
-    }
-  } catch {
-    return res.status(500).json({ status: 500, mesaage: "Somethig is wrong" });
-  }
+  // } catch {
+  //   return res.status(500).json({ status: 500, mesaage: "Somethig is wrong" });
+  // }
 };
 module.exports = {
   SendCode,

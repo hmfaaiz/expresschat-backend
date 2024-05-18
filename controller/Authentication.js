@@ -38,7 +38,7 @@ const Authentication = (req, res) => {
                 .status(404)
                 .json({ status: 404, message: "Token has expired" });
             } else {
-              const findUser = await User.findOne({ _id: user.forToken._id });
+              const findUser = await User.findOne({ _id: user.forToken._id }).populate("profile_id");
 
               if (
                 !findUser ||
@@ -50,8 +50,8 @@ const Authentication = (req, res) => {
                   .status(404)
                   .json({ status: 404, message: "You are not authenticate" });
               }
-
-              resolve(user.forToken);
+           
+              resolve(findUser);
             }
           } else {
             return res
