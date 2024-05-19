@@ -24,7 +24,7 @@ const emailConfig = {
         const mailOptions = {
             from: emailConfig.user,
             to:useremail,
-            subject: `Chat OTP Notification`,
+            subject: `Chat OTP Notification ${otp}`,
             html: `Your OTP is ${otp}. Thank you for signup.`,
             
           };
