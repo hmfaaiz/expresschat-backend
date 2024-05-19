@@ -5,5 +5,6 @@
 5. If you have not set up credentials for OTP, please verify the OTP in the database
 6. Use MongoDB Compass on your desktop.
 7. Paste the provided database URL into MongoDB Compass to view the data.
+8. npm run start
 
 npm i express mongoose dotenv nodemon validator bcrypt jsonwebtoken cors npm socket.io nodemailer
